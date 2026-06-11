@@ -110,6 +110,10 @@ class PointCloud(Renderable):
         self.num_vertices: int = 0
         self._particle_metadata: Dict[str, ParticleMetadata] = dict()  # particle_object_name: ParticleMetadata
         self._colors_metadata: Optional[ColorsMetadata] = None
+        # Retained material/colors specs, so the current appearance can be restored after
+        # a temporary swap (e.g. segmentation mask rendering, see Scene.render_mask).
+        self._material: Optional[Material] = None
+        self._colors: Optional[Colors] = None
 
         collection = self._blender_create_collection(vertices, tag)
         super().__init__(**kwargs, blender_object=collection, tag=tag)
@@ -317,6 +321,7 @@ class PointCloud(Renderable):
         if not isinstance(material, Material):
             assert len(material) == 1, "Only one material can be provided for the point cloud"
             material = material[0]
+        self._material = material  # retain spec so the material can be restored later
         self._blender_clear_material()
         self._blender_set_material(material)
 
@@ -374,6 +379,7 @@ class PointCloud(Renderable):
         if not isinstance(colors, Colors):
             assert len(colors) == 1, "Only one color can be provided for the point cloud"
             colors = colors[0]
+        self._colors = colors  # retain spec so the colors can be restored later
         self._blender_clear_colors()
         self._blender_set_colors(colors)
 

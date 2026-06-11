@@ -41,7 +41,8 @@ commonly used routines and functions:
     * support for common camera models;
     * import and export of .blend files for deeper integration with Blender;
     * per-face definition of materials for meshes;
-    * support for common rotation representations and look-at utility to automatically setup orientation.
+    * support for common rotation representations and look-at utility to automatically setup orientation;
+    * segmentation mask rendering (instance / semantic / silhouette) with exact per-object colors.
 3. **Quick start:** Blendify is easy to get started with and does not require a standalone Blender installation. All you need to do is run `pip install blendify`.
 
 4. **Blendify works in Colab:** check out [our Google Colab demo](https://colab.research.google.com/github/ptrvilya/blendify/blob/main/examples/ipynb/blendify_colab_demo.ipynb)!
@@ -122,6 +123,31 @@ SMPL-X [README](https://github.com/vchoutas/smplx#downloading-the-model).
   </tr>
 </table>
 
+
+## What's new in this version
+This version features **segmentation mask rendering**, adapted from
+[blender_datagen](https://github.com/Bozcomlekci/blender_datagen) and rebuilt on top of
+blendify's class hierarchy (no extra dependencies). The same scene that produces a lit render can
+now produce pixel-exact masks through the standard render call:
+
+```python
+image, info = scene.render("mask.png", mask="instance")   # or "semantic" / "silhouette"
+```
+
+* **Three modes:** `instance` (a unique id per renderable), `semantic` (one id per user-defined
+  category, via `categories={tag: label}`), and `silhouette` (binary foreground).
+* **Exact colors:** flat emission rendering with single-sample, dither-free settings — every pixel
+  matches its object's palette color exactly (no anti-aliased borders), so masks map losslessly to
+  integer label maps (`debug=True` also writes the `*_ids.png` label map and a
+  `.mask_mapping.json` with id ↔ color ↔ tag mappings).
+* **Non-destructive:** materials, point-cloud colors, and render settings are restored after the
+  mask render, so lit renders keep working on the same scene.
+* Works for meshes, primitives, NURBS surfaces, and point clouds; see
+  [examples/09_mask_rendering.py](examples/09_mask_rendering.py) for a 100-object demo.
+
+Under the hood the feature follows the blendify architecture: `EmissionMaterial` (a `Material`),
+`PaletteColors` (a `ColorsList` of `UniformColors`), and a singleton `MaskContext` rendering
+context in `blendify.settings`.
 
 ## Changelog
 The most recent version of blendify is **2.1.0**. 

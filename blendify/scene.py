@@ -24,6 +24,7 @@ from .lights import LightsCollection
 from .renderables import RenderablesCollection
 
 
+
 class Scene(metaclass=Singleton):
     def __init__(self):
         # Initialise Blender scene
@@ -210,7 +211,8 @@ class Scene(metaclass=Singleton):
     def render(
             self, filepath: Union[str, Path] = None, use_gpu: bool = True, samples: int = 128,
             save_depth: bool = False, save_albedo: bool = False, verbose: bool = False,
-            use_denoiser: bool = False, aa_filter_width: float = 1.5
+            use_denoiser: bool = False, aa_filter_width: float = 1.5, mask: str = None,
+            **mask_kwargs
     ):
         """Start the Blender rendering process
 
@@ -230,7 +232,20 @@ class Scene(metaclass=Singleton):
             verbose (bool): whether to allow blender to log its status to stdout during rendering
             use_denoiser (bool): use openimage denoiser to denoise the result
             aa_filter_width (float): width of the anti-aliasing filter, set 0 to turn off
+            mask (str): if set, render a segmentation mask instead of a lit image -- one of
+              "instance", "silhouette" or "semantic". Drives
+              :class:`blendify.settings.MaskContext`;
+              extra mask options (``categories``, ``colors``, ``background_color``,
+              ``assign_ids``, ``debug``) are forwarded as keyword arguments and the
+              ``(image, info)`` tuple is returned.
         """
+        if mask is not None:
+            return self._render_mask(filepath=filepath, mode=mask, use_gpu=use_gpu,
+                                     verbose=verbose, **mask_kwargs)
+        if mask_kwargs:
+            raise TypeError(f"render() got unexpected keyword arguments {list(mask_kwargs)} "
+                            f"(these are only valid together with mask=...)")
+
         if self.camera is None:
             raise RuntimeError("Can't render without a camera")
 
@@ -371,6 +386,51 @@ class Scene(metaclass=Singleton):
                 if save_albedo:
                     shutil.move(temp_filepath + f".albedo.{self._frame_number:04d}.png", os.path.splitext(filepath)[0] + ".albedo.png")
                     output_albedo.file_slots[0].path =  filename + ".albedo."
+
+    def _render_mask(
+            self, filepath: Union[str, Path] = None, mode: str = "instance",
+            categories: dict = None, colors: Sequence[Vector3d] = None,
+            background_color: Vector3d = (0., 0., 0.), assign_ids: bool = True,
+            debug: bool = False, use_gpu: bool = True, verbose: bool = False
+    ):
+        """Render a segmentation mask: drives :class:`blendify.settings.MaskContext`
+        and reuses :meth:`render` for the actual rendering. Invoked from :meth:`render`
+        when ``mask=`` is set; not part of the public surface.
+        """
+        if self.camera is None:
+            raise RuntimeError("Can't render without a camera")
+
+        from .settings import MaskContext
+        ctx = MaskContext.instance().configure(
+            mode=mode, categories=categories, colors=colors,
+            background_color=background_color, assign_ids=assign_ids,
+        )
+        with ctx:
+            # Reuse Scene.render with flat settings (samples=1, no AA, no denoise)
+            image = self.render(filepath=None, use_gpu=use_gpu, samples=1,
+                                aa_filter_width=0, use_denoiser=False, verbose=verbose)
+
+        info = {"tag_to_color": ctx.palette.tag_to_color, "tag_to_id": ctx.palette.tag_to_id}
+
+        if filepath is not None:
+            filepath = Path(filepath)
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(filepath), cv2.cvtColor(image[..., :3], cv2.COLOR_RGB2BGR))
+
+        if debug:
+            from .utils.image import rgba_to_labels
+            from .utils.io import save_mapping
+            maskint_to_color = ctx.palette.id_to_color
+            mask = rgba_to_labels(image, maskint_to_color)
+            info["mask"] = mask
+            info["maskint_to_color"] = maskint_to_color
+            if filepath is not None:
+                cv2.imwrite(str(filepath.with_name(filepath.stem + "_ids" + filepath.suffix)),
+                            mask.astype(np.uint16))
+                save_mapping(str(filepath) + ".mask_mapping.json",
+                             maskint_to_color, ctx.palette.tag_to_id)
+
+        return image, info
 
     @safe_exit
     def preview(self, filepath: Union[str, Path] = None, save_depth: bool = False, save_albedo: bool = False, verbose: bool = False, fast: bool = False):

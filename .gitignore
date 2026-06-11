@@ -6,3 +6,4 @@ build/
 _build/
 dist/
 blendify.egg-info/
+output/
