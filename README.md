@@ -145,6 +145,18 @@ image, info = scene.render("mask.png", mask="instance")   # or "semantic" / "sil
 * Works for meshes, primitives, NURBS surfaces, and point clouds; see
   [examples/09_mask_rendering.py](examples/09_mask_rendering.py) for a 100-object demo.
 
+<table>
+  <tr align="center">
+    <td><b>Lit render</b></td>
+    <td><b>Instance mask</b></td>
+    <td><b>Semantic mask</b></td>
+  </tr>
+  <tr align="center">
+    <td><img src="./docs/_static/examples/09_render.png" width="310px"/></td>
+    <td><img src="./docs/_static/examples/09_mask_instance.png" width="310px"/></td>
+    <td><img src="./docs/_static/examples/09_mask_semantic.png" width="310px"/></td>
+  </tr>
+</table>
 Under the hood the feature follows the blendify architecture: `EmissionMaterial` (a `Material`),
 `PaletteColors` (a `ColorsList` of `UniformColors`), and a singleton `MaskContext` rendering
 context in `blendify.settings`.
